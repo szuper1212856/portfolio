@@ -737,14 +737,16 @@ async function openEditProject(id){
   document.getElementById('projectModal').classList.add('open');
 }
 async function saveEditProject(id){
+  if(!_session){showToast('Not logged in.','error');return}
   const title=document.getElementById('ep-title').value.trim();
   const lang=document.getElementById('ep-lang').value;
-  const desc=document.getElementById('ep-desc').value.trim();
+  const description=document.getElementById('ep-desc').value.trim();
   const tags=document.getElementById('ep-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const link=document.getElementById('ep-link').value.trim();
   if(!title){showToast('Title is required.','error');return}
-  const{error}=await _sb.from('projects').update({title,lang,description:desc,tags,link:link||null}).eq('id',id);
-  if(error){showToast('Update error: '+error.message,'error');return}
+  const{data,error}=await _sb.from('projects').update({title,lang,description,tags,link:link||null}).eq('id',Number(id)).select();
+  if(error){showToast('Update error: '+error.message,'error');console.error('Supabase update error:',error);return}
+  if(!data||data.length===0){showToast('No row updated — check Supabase RLS policy allows UPDATE.','error');return}
   closeModal('projectModal');showToast('Project updated!');loadProjects();loadAdminProjects();
 }
 async function deleteProject(id){
@@ -838,11 +840,13 @@ async function openEditVideo(id){
   document.getElementById('projectModal').classList.add('open');
 }
 async function saveEditVideo(id){
+  if(!_session){showToast('Not logged in.','error');return}
   const title=document.getElementById('ev-title').value.trim();
-  const desc=document.getElementById('ev-desc').value.trim();
+  const description=document.getElementById('ev-desc').value.trim();
   const embed=document.getElementById('ev-embed').value.trim();
-  const{error}=await _sb.from('videos').update({title,description:desc,embed_url:embed||null}).eq('id',id);
-  if(error){showToast('Update error: '+error.message,'error');return}
+  const{data,error}=await _sb.from('videos').update({title,description,embed_url:embed||null}).eq('id',Number(id)).select();
+  if(error){showToast('Update error: '+error.message,'error');console.error('Supabase update error:',error);return}
+  if(!data||data.length===0){showToast('No row updated — check Supabase RLS policy allows UPDATE.','error');return}
   closeModal('projectModal');showToast('Video updated!');loadVideos();loadAdminVideos();
 }
 async function deleteVideo(id){
