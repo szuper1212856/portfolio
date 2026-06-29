@@ -512,6 +512,7 @@ section{position:relative;z-index:1}
 const SUPABASE_URL='https://lkabbpdukgiwajypmliw.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrYWJicGR1a2dpd2FqeXBtbGl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMzYxMTMsImV4cCI6MjA5NzcxMjExM30.0nNjQWf99WLhIpgsAuBbNAUkXIgVQ57IPkgKkjvNlrk';
 const _sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+
 (function(){
   const c=document.getElementById('stars-canvas'),ctx=c.getContext('2d');
   let stars=[];
@@ -520,6 +521,7 @@ const _sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
   const draw=()=>{ctx.clearRect(0,0,c.width,c.height);stars.forEach(s=>{s.a+=s.s;if(s.a>1||s.a<0)s.s*=-1;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(200,220,255,${s.a*.6})`;ctx.fill()});requestAnimationFrame(draw)};
   window.addEventListener('resize',resize);init();draw();
 })();
+
 function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function toggleMenu(){document.getElementById('navLinks').classList.toggle('open')}
 function showToast(msg,type='success'){
@@ -527,15 +529,18 @@ function showToast(msg,type='success'){
   t.textContent=msg;t.className='toast '+type;t.classList.add('show');
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3500);
 }
+
 const revObs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')})},{threshold:.08});
 document.querySelectorAll('.reveal').forEach(el=>revObs.observe(el));
+
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 document.getElementById('projectModal').addEventListener('click',e=>{if(e.target.id==='projectModal')closeModal('projectModal')});
 function closeLightbox(){document.getElementById('lightbox').classList.remove('open')}
 document.getElementById('lightbox').addEventListener('click',e=>{if(e.target.id==='lightbox')closeLightbox()});
+
 let _session=null;
 async function checkSession(){
-  const {data}=await _sb.auth.getSession();
+  const{data}=await _sb.auth.getSession();
   _session=data.session;updateAuthUI(!!_session);return _session;
 }
 function updateAuthUI(li){
@@ -575,15 +580,16 @@ async function doLogin(){
   const{data}=await _sb.auth.getSession();
   _session=data.session;closeLoginModal();updateAuthUI(true);showToast('Welcome back, Balázs!');openAdmin();
 }
+
 function switchAdminTab(tab,btn){
   document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   btn.classList.add('active');document.getElementById('atab-'+tab).classList.add('active');
 }
 async function loadAdminData(){
-  await Promise.all([loadAdminProjects(),loadAdminVideos(),loadAdminPhotos(),loadAdminComments()]);
-  loadSimgridInputs();initSgEventRows();
+  await Promise.all([loadAdminProjects(),loadAdminVideos(),loadAdminPhotos(),loadAdminComments(),loadSimgridSection()]);
 }
+
 let _pf=[],_vf=[],_phf=[];
 function setupDrop(areaId,arr,previewId){
   const area=document.getElementById(areaId);
@@ -614,6 +620,7 @@ setupDrop('photoDropArea',_phf,'phfp');
 document.getElementById('projectFilePreview').id='pfp';
 document.getElementById('videoFilePreview').id='vfp';
 document.getElementById('photoFilePreview').id='phfp';
+
 function simProgress(wrapId,fillId,cb){
   const wrap=document.getElementById(wrapId),fill=document.getElementById(fillId);
   wrap.style.display='block';fill.style.width='0%';
@@ -621,6 +628,7 @@ function simProgress(wrapId,fillId,cb){
   const iv=setInterval(()=>{w=Math.min(w+Math.random()*18+5,92);fill.style.width=w+'%'},120);
   return()=>{clearInterval(iv);fill.style.width='100%';setTimeout(()=>{wrap.style.display='none';fill.style.width='0%';if(cb)cb()},600)};
 }
+
 let _cf='all';
 async function loadProjects(){
   let q=_sb.from('projects').select('*').order('id',{ascending:false});
@@ -693,15 +701,58 @@ async function loadAdminProjects(){
   el.innerHTML=data.map(p=>`
     <div class="content-row glass">
       <div class="cr-icon">📁</div>
-      <div class="cr-info"><div class="cr-title">${escHtml(p.title)}</div><div class="cr-meta">${p.lang} · ${(p.files||[]).length} file(s)</div></div>
-      <div class="cr-actions"><button class="btn-sm reject" onclick="deleteProject(${p.id})">Delete</button></div>
+      <div class="cr-info"><div class="cr-title">${escHtml(p.title)}</div><div class="cr-meta">${p.lang} · ${(p.files||[]).length} file(s) · ${(p.tags||[]).join(', ')||'no tags'}</div></div>
+      <div class="cr-actions">
+        <button class="btn-sm approve" onclick="openEditProject(${p.id})">Edit</button>
+        <button class="btn-sm reject" onclick="deleteProject(${p.id})">Delete</button>
+      </div>
     </div>`).join('');
+}
+async function openEditProject(id){
+  const{data:p}=await _sb.from('projects').select('*').eq('id',id).single();
+  if(!p)return;
+  document.getElementById('modalContent').innerHTML=`
+    <h2 class="modal-title">Edit Project</h2>
+    <div style="display:grid;gap:14px">
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Title</label>
+        <input id="ep-title" value="${escHtml(p.title)}" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)" /></div>
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Language</label>
+        <select id="ep-lang" style="background:#0d1117;border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)">
+          <option value="python"${p.lang==='python'?' selected':''}>Python</option>
+          <option value="javascript"${p.lang==='javascript'?' selected':''}>JavaScript</option>
+          <option value="csharp"${p.lang==='csharp'?' selected':''}>C#</option>
+          <option value="other"${p.lang==='other'?' selected':''}>Other</option>
+        </select></div>
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Description</label>
+        <textarea id="ep-desc" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body);min-height:80px;resize:vertical">${escHtml(p.description||'')}</textarea></div>
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Tags (comma separated)</label>
+        <input id="ep-tags" value="${escHtml((p.tags||[]).join(', '))}" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)" /></div>
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">External Link</label>
+        <input id="ep-link" value="${escHtml(p.link||'')}" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)" /></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="saveEditProject(${p.id})">Save Changes</button>
+        <button class="btn-outline" onclick="closeModal('projectModal')">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById('projectModal').classList.add('open');
+}
+async function saveEditProject(id){
+  const title=document.getElementById('ep-title').value.trim();
+  const lang=document.getElementById('ep-lang').value;
+  const desc=document.getElementById('ep-desc').value.trim();
+  const tags=document.getElementById('ep-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const link=document.getElementById('ep-link').value.trim();
+  if(!title){showToast('Title is required.','error');return}
+  const{error}=await _sb.from('projects').update({title,lang,description:desc,tags,link:link||null}).eq('id',id);
+  if(error){showToast('Update error: '+error.message,'error');return}
+  closeModal('projectModal');showToast('Project updated!');loadProjects();loadAdminProjects();
 }
 async function deleteProject(id){
   if(!confirm('Delete this project?'))return;
   await _sb.from('projects').delete().eq('id',id);
   showToast('Project deleted.');loadProjects();loadAdminProjects();
 }
+
 async function loadVideos(){
   const{data}=await _sb.from('videos').select('*').order('id',{ascending:false});
   const grid=document.getElementById('videoGrid');
@@ -761,13 +812,44 @@ async function loadAdminVideos(){
     <div class="content-row glass">
       <div class="cr-icon">🎬</div>
       <div class="cr-info"><div class="cr-title">${escHtml(v.title||'Untitled')}</div><div class="cr-meta">${v.embed_url?'Embed':'File'} · ${escHtml(v.description||'')}</div></div>
-      <div class="cr-actions"><button class="btn-sm reject" onclick="deleteVideo(${v.id})">Delete</button></div>
+      <div class="cr-actions">
+        <button class="btn-sm approve" onclick="openEditVideo(${v.id})">Edit</button>
+        <button class="btn-sm reject" onclick="deleteVideo(${v.id})">Delete</button>
+      </div>
     </div>`).join('');
+}
+async function openEditVideo(id){
+  const{data:v}=await _sb.from('videos').select('*').eq('id',id).single();
+  if(!v)return;
+  document.getElementById('modalContent').innerHTML=`
+    <h2 class="modal-title">Edit Video</h2>
+    <div style="display:grid;gap:14px">
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Title</label>
+        <input id="ev-title" value="${escHtml(v.title||'')}" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)" /></div>
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Description</label>
+        <input id="ev-desc" value="${escHtml(v.description||'')}" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)" /></div>
+      <div class="form-field"><label style="font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">YouTube / Embed URL</label>
+        <input id="ev-embed" value="${escHtml(v.embed_url||'')}" style="background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:.9rem;font-family:var(--font-body)" /></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="saveEditVideo(${v.id})">Save Changes</button>
+        <button class="btn-outline" onclick="closeModal('projectModal')">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById('projectModal').classList.add('open');
+}
+async function saveEditVideo(id){
+  const title=document.getElementById('ev-title').value.trim();
+  const desc=document.getElementById('ev-desc').value.trim();
+  const embed=document.getElementById('ev-embed').value.trim();
+  const{error}=await _sb.from('videos').update({title,description:desc,embed_url:embed||null}).eq('id',id);
+  if(error){showToast('Update error: '+error.message,'error');return}
+  closeModal('projectModal');showToast('Video updated!');loadVideos();loadAdminVideos();
 }
 async function deleteVideo(id){
   if(!confirm('Delete this video?'))return;
   await _sb.from('videos').delete().eq('id',id);showToast('Video deleted.');loadVideos();loadAdminVideos();
 }
+
 async function loadPhotos(){
   const{data}=await _sb.from('photos').select('*').order('id',{ascending:false});
   const grid=document.getElementById('photoGrid');
@@ -804,6 +886,7 @@ async function deletePhoto(id){
   if(!confirm('Delete this photo?'))return;
   await _sb.from('photos').delete().eq('id',id);showToast('Photo deleted.');loadPhotos();loadAdminPhotos();
 }
+
 async function loadComments(){
   const{data}=await _sb.from('comments').select('*').eq('approved',true).order('id',{ascending:false});
   const el=document.getElementById('commentList');
@@ -875,48 +958,71 @@ async function deleteComment(id){
   await _sb.from('comments').delete().eq('id',id);
   showToast('Comment deleted.');loadComments();loadAdminComments();
 }
-let _sgRows=0;
-function loadSimgridInputs(){
-  try{
-    const s=JSON.parse(localStorage.getItem('sg_data')||'{}');
-    if(s.events)document.getElementById('sg-input-events').value=s.events;
-    if(s.rating)document.getElementById('sg-input-rating').value=s.rating;
-    if(s.wins)document.getElementById('sg-input-wins').value=s.wins;
-    if(s.laps)document.getElementById('sg-input-laps').value=s.laps;
-    document.getElementById('sg-events').textContent=s.events||'—';
-    document.getElementById('sg-rating').textContent=s.rating||'—';
-    document.getElementById('sg-wins').textContent=s.wins||'—';
-    document.getElementById('sg-laps').textContent=s.laps||'—';
-    if(s.recentEvents&&s.recentEvents.length){
-      document.getElementById('sgEvents').innerHTML=s.recentEvents.map(e=>`
-        <div class="event-row">
-          <div><div class="event-name">${escHtml(e.name||'')}</div><div class="event-meta">${escHtml(e.meta||'')}</div></div>
-          <div class="event-pos">${escHtml(e.pos||'')}</div>
-        </div>`).join('');
-    }
-    if(s.upcomingRaces&&s.upcomingRaces.length){
-      document.getElementById('upcomingRaces').innerHTML=s.upcomingRaces.map(r=>`
-        <div class="upcoming-row">
-          <div>
-            <div class="upcoming-name">${escHtml(r.name||'')}</div>
-            <div class="upcoming-meta">${escHtml(r.meta||'')}</div>
-            <span class="race-badge ${r.badge||'registered'}">${r.badge==='soon'?'Soon':'Registered'}</span>
-          </div>
-          <div class="upcoming-date">${escHtml(r.date||'')}</div>
-        </div>`).join('');
-    }
-  }catch(e){}
-}
-function initSgEventRows(){
-  const s=JSON.parse(localStorage.getItem('sg_data')||'{}');
-  const rows=s.recentEvents||[{},{},{}];
+
+async function loadSimgridSection(){
+  const{data}=await _sb.from('simgrid').select('*').eq('id',1).single();
+  if(!data)return;
+  document.getElementById('sg-events').textContent=data.total_events||'—';
+  document.getElementById('sg-rating').textContent=data.safety_rating||'—';
+  document.getElementById('sg-wins').textContent=data.wins||'—';
+  document.getElementById('sg-laps').textContent=data.total_laps||'—';
+  if(data.recent_events&&data.recent_events.length){
+    document.getElementById('sgEvents').innerHTML=data.recent_events.map(e=>`
+      <div class="event-row">
+        <div><div class="event-name">${escHtml(e.name||'')}</div><div class="event-meta">${escHtml(e.meta||'')}</div></div>
+        <div class="event-pos">${escHtml(e.pos||'')}</div>
+      </div>`).join('');
+  }
+  if(data.upcoming_races&&data.upcoming_races.length){
+    document.getElementById('upcomingRaces').innerHTML=data.upcoming_races.map(r=>`
+      <div class="upcoming-row">
+        <div>
+          <div class="upcoming-name">${escHtml(r.name||'')}</div>
+          <div class="upcoming-meta">${escHtml(r.meta||'')}</div>
+          <span class="race-badge ${r.badge||'registered'}">${r.badge==='soon'?'Soon':'Registered'}</span>
+        </div>
+        <div class="upcoming-date">${escHtml(r.date||'')}</div>
+      </div>`).join('');
+  }
+  document.getElementById('sg-input-events').value=data.total_events||'';
+  document.getElementById('sg-input-rating').value=data.safety_rating||'';
+  document.getElementById('sg-input-wins').value=data.wins||'';
+  document.getElementById('sg-input-laps').value=data.total_laps||'';
   document.getElementById('sgEventInputs').innerHTML='';_sgRows=0;
+  const rows=data.recent_events||[{},{},{}];
   rows.forEach(r=>addSgEventRow(r));
-  const urows=s.upcomingRaces||[{}];
   document.getElementById('sgUpcomingInputs').innerHTML='';_sgUpRows=0;
+  const urows=data.upcoming_races||[{}];
   urows.forEach(r=>addSgUpcomingRow(r));
 }
-let _sgUpRows=0;
+async function loadSimgridPublic(){
+  const{data}=await _sb.from('simgrid').select('*').eq('id',1).single();
+  if(!data)return;
+  document.getElementById('sg-events').textContent=data.total_events||'—';
+  document.getElementById('sg-rating').textContent=data.safety_rating||'—';
+  document.getElementById('sg-wins').textContent=data.wins||'—';
+  document.getElementById('sg-laps').textContent=data.total_laps||'—';
+  if(data.recent_events&&data.recent_events.length){
+    document.getElementById('sgEvents').innerHTML=data.recent_events.map(e=>`
+      <div class="event-row">
+        <div><div class="event-name">${escHtml(e.name||'')}</div><div class="event-meta">${escHtml(e.meta||'')}</div></div>
+        <div class="event-pos">${escHtml(e.pos||'')}</div>
+      </div>`).join('');
+  }
+  if(data.upcoming_races&&data.upcoming_races.length){
+    document.getElementById('upcomingRaces').innerHTML=data.upcoming_races.map(r=>`
+      <div class="upcoming-row">
+        <div>
+          <div class="upcoming-name">${escHtml(r.name||'')}</div>
+          <div class="upcoming-meta">${escHtml(r.meta||'')}</div>
+          <span class="race-badge ${r.badge||'registered'}">${r.badge==='soon'?'Soon':'Registered'}</span>
+        </div>
+        <div class="upcoming-date">${escHtml(r.date||'')}</div>
+      </div>`).join('');
+  }
+}
+
+let _sgRows=0,_sgUpRows=0;
 function addSgEventRow(pf={}){
   if(_sgRows>=6)return;_sgRows++;const i=_sgRows;
   const div=document.createElement('div');
@@ -941,34 +1047,41 @@ function addSgUpcomingRow(pf={}){
     ${sel}`;
   document.getElementById('sgUpcomingInputs').appendChild(div);
 }
-function saveSimgridData(){
-  const data={
-    events:document.getElementById('sg-input-events').value,
-    rating:document.getElementById('sg-input-rating').value,
-    wins:document.getElementById('sg-input-wins').value,
-    laps:document.getElementById('sg-input-laps').value,
-    recentEvents:[]
-  };
+async function saveSimgridData(){
+  if(!_session){showToast('Not logged in.','error');return}
+  const recent_events=[];
   for(let i=1;i<=_sgRows;i++){
     const ne=document.getElementById(`sg-ev-name-${i}`);
     if(!ne)continue;const name=ne.value.trim();if(!name)continue;
-    data.recentEvents.push({name,meta:document.getElementById(`sg-ev-meta-${i}`).value.trim(),pos:document.getElementById(`sg-ev-pos-${i}`).value.trim()});
+    recent_events.push({name,meta:document.getElementById(`sg-ev-meta-${i}`).value.trim(),pos:document.getElementById(`sg-ev-pos-${i}`).value.trim()});
   }
-  data.upcomingRaces=[];
+  const upcoming_races=[];
   for(let i=1;i<=_sgUpRows;i++){
     const ne=document.getElementById(`sg-up-name-${i}`);
     if(!ne)continue;const name=ne.value.trim();if(!name)continue;
-    data.upcomingRaces.push({name,meta:document.getElementById(`sg-up-meta-${i}`).value.trim(),date:document.getElementById(`sg-up-date-${i}`).value.trim(),badge:document.getElementById(`sg-up-badge-${i}`).value});
+    upcoming_races.push({name,meta:document.getElementById(`sg-up-meta-${i}`).value.trim(),date:document.getElementById(`sg-up-date-${i}`).value.trim(),badge:document.getElementById(`sg-up-badge-${i}`).value});
   }
-  localStorage.setItem('sg_data',JSON.stringify(data));
-  loadSimgridInputs();showToast('SimGrid data saved!');
+  const payload={
+    id:1,
+    total_events:document.getElementById('sg-input-events').value||null,
+    safety_rating:document.getElementById('sg-input-rating').value||null,
+    wins:document.getElementById('sg-input-wins').value||null,
+    total_laps:document.getElementById('sg-input-laps').value||null,
+    recent_events,upcoming_races
+  };
+  const{error}=await _sb.from('simgrid').upsert(payload);
+  if(error){showToast('Save error: '+error.message,'error');return}
+  showToast('SimGrid data saved!');
+  loadSimgridPublic();
 }
+
 function switchMedia(tab,btn){
   document.querySelectorAll('.media-tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.media-panel').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');document.getElementById('media-'+tab).classList.add('active');
 }
-checkSession();loadProjects();loadVideos();loadPhotos();loadComments();loadSimgridInputs();
+
+checkSession();loadProjects();loadVideos();loadPhotos();loadComments();loadSimgridPublic();
 </script>
 </body>
 </html>
